@@ -24,21 +24,50 @@ namespace Vidly.Controllers
             _context.Dispose();
         }
 
-        public ActionResult CustomerForm()
+        public ActionResult New()
         {
             var memberShipTypes = _context.MembershipTypes.ToList();
             var viewModel = new CustomerFormViewModel
             {
+                // Een nieuw customer initieren om validation errors (op id, hidden field) op te lossen.
+                Customer = new Customer(),
                 MembershipTypes = memberShipTypes
             };
-            return View(viewModel);
+            return View("CustomerForm", viewModel);
        
         }
 
         [HttpPost]
-        public ActionResult Create(Customer customer)
+        [ValidateAntiForgeryToken]
+        public ActionResult Save(Customer customer)
         {
-            _context.Customers.Add(customer);
+            if (!ModelState.IsValid)
+            {
+                var viewModel = new CustomerFormViewModel
+                {
+                    Customer = customer,
+                    MembershipTypes = _context.MembershipTypes.ToList()
+                };
+
+                return View("CustomerForm", viewModel);
+            }
+
+            if (customer.Id == 0)
+            {
+                _context.Customers.Add(customer);
+            }
+            else
+            {
+                var existingCustomerInDb = _context.Customers.Single(c => c.Id == customer.Id);
+                // updaten van de record in de database kan op twee manieren.
+                // TryUpdateModel(existingCustomerInDb, "", new string[] { "Name", "Email"}); 
+                // De manier die door Microsoft wordt gebruikt voor het updaten van een customer. Deze levert wat problemen op. Kwaadwillende gebruikers kunnen op deze manier alle properties veranderen. Met het derde argumetn kunen welliswaar argumenten ge-whitelist worden. Maar dit levert een probleem op als de naam van een property wordt aangepast later. Het alternatief is de properites handmatig vullen.
+                existingCustomerInDb.Name = customer.Name;
+                existingCustomerInDb.Birthdate = customer.Birthdate;
+                existingCustomerInDb.MembershipType = customer.MembershipType;
+                existingCustomerInDb.IsSubscribedToNewsletter = customer.IsSubscribedToNewsletter;
+                // ER kan een lib zoals "Automapper" worden gebruikt om de properties te mappen. 
+            }
             _context.SaveChanges();
             
             return RedirectToAction("Index", "Customers");
